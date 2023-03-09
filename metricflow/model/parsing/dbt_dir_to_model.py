@@ -1,11 +1,14 @@
 from dataclasses import dataclass
-from dbt.lib import get_dbt_config
-from dbt import tracking
-from dbt.parser.manifest import ManifestLoader as DbtManifestLoader, Manifest as DbtManifest
-from metricflow.model.model_transformer import ModelTransformer
-from metricflow.model.parsing.dir_to_model import ModelBuildResult
-from metricflow.model.transformations.dbt_to_metricflow import DbtManifestTransformer
+from pathlib import Path
 from typing import Optional
+
+from dbt import tracking
+from dbt.lib import get_dbt_config
+from dbt.parser.manifest import ManifestLoader as DbtManifestLoader, Manifest as DbtManifest
+
+from metricflow.model.model_transformer import ModelTransformer
+from metricflow.model.parsing.dir_to_model import ModelBuildResult, parse_directory_of_yaml_files_to_model
+from metricflow.model.transformations.yet_another_dbt_to_metricflow import YetAnotherDbtManifestTransformer
 
 
 @dataclass
@@ -39,6 +42,11 @@ def parse_dbt_project_to_model(
 ) -> ModelBuildResult:
     """Parse dbt model files in the given directory to a UserConfiguredModel."""
     manifest = get_dbt_project_manifest(directory=directory, profile=profile, target=target)
-    build_result = DbtManifestTransformer(manifest=manifest).build_user_configured_model()
-    transformed_model = ModelTransformer.transform(model=build_result.model)
-    return ModelBuildResult(model=transformed_model, issues=build_result.issues)
+    dbt_build_result = YetAnotherDbtManifestTransformer(manifest=manifest).build_user_configured_model()
+
+    mf_metrics_dir = str(Path(directory).joinpath("metrics"))
+    mf_build_result = parse_directory_of_yaml_files_to_model(mf_metrics_dir)
+    dbt_build_result.model.metrics = mf_build_result.model.metrics
+
+    transformed_model = ModelTransformer.transform(model=dbt_build_result.model)
+    return ModelBuildResult(model=transformed_model, issues=dbt_build_result.issues)
